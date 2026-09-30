@@ -1,5 +1,24 @@
 # cs2-dumper
 
+> [!IMPORTANT]
+> ## 来源声明 / Attribution
+>
+> **本仓库是对原作者项目的本地修改副本，不是原创项目。**
+> **This repository is a locally modified copy of the original project — NOT original work.**
+>
+> - **原作者 / Original author:** a2x — <https://github.com/a2x>
+> - **原仓库 / Original repository:** **<https://github.com/a2x/cs2-dumper>**
+>
+> 本仓库 <https://github.com/ianlike-ui/cs2-dumper> 只是借用了原作者的代码，并在其基础上做了本地修改
+> （例如为适应当前游戏版本而更新偏移签名）。**全部原始代码、设计、文档与版权均归原作者所有。**
+> 请以**原仓库** <https://github.com/a2x/cs2-dumper> 为准获取最新版本、发布包与正式支持。
+>
+> This copy is for local use only, built upon the original author's code. All original code, design,
+> documentation and licensing belong to the original author. For the latest version, releases and
+> official support, please use the **original repository**: <https://github.com/a2x/cs2-dumper>.
+
+---
+
 An external offset/interface dumper for Counter-Strike 2, with support for both Windows & Linux. Powered
 by [memflow](https://github.com/memflow/memflow).
 
