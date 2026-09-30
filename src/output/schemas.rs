@@ -1,3 +1,20 @@
+// ============================================================================
+// output/schemas.rs —— 把"Schema 类表"写成各种语言的文件（最大的一份输出）
+//
+// 【这个文件是干什么的】
+// 把 SchemaMap（模块名 → (类列表, 枚举列表)）写成 5 种语言。
+// 生成的 client_dll.hpp 就是 cs2_cheat 里用的那份：每个类是一个
+// namespace，里面每个字段一行 `constexpr std::ptrdiff_t 字段名 = 偏移;`。
+//
+// 【生成时处理的各种边角情况】
+// - 枚举的底层类型由 alignment（对齐）决定：1→u8、2→u16、4→u32、8→u64；
+// - 枚举成员值可能超出该类型能表达的范围：C# 用 unchecked 强制转换，
+//   C++ 直接截断到该类型最大值，Zig 做无符号回绕（format_zig_enum_member_value）；
+// - Rust/Zig 里重复的枚举值会被跳过（语言不允许重复判别值）；
+// - 类名/字段名统一做 slugify（去掉非法字符），Zig 再包一层 zig_ident；
+// - 元数据（网络变量等）写进注释里（write_metadata），方便人读。
+// ============================================================================
+
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{self, Write};
 
@@ -497,6 +514,7 @@ impl CodeWriter for SchemaMap {
     }
 }
 
+// 把类的元数据（网络变量等）写成注释（每种语言通用）
 fn write_metadata(fmt: &mut Formatter<'_>, metadata: &[ClassMetadata]) -> fmt::Result {
     if metadata.is_empty() {
         return Ok(());
@@ -522,6 +540,7 @@ fn write_metadata(fmt: &mut Formatter<'_>, metadata: &[ClassMetadata]) -> fmt::R
     Ok(())
 }
 
+// Zig 枚举成员值格式化：负数按目标无符号类型"回绕"成 16 进制
 fn format_zig_enum_member_value(value: i64, type_name: &str) -> String {
     if value >= 0 {
         return format!("{:#X}", value);

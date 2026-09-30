@@ -1,24 +1,71 @@
+// ============================================================================
+// memory/address.rs —— 地址运算工具：解析 x86-64 的"相对跳转/相对寻址"
+//
+// ----------------------------------------------------------------------------
+// 🎓 概念卡 ㊲：x86-64 的 RIP 相对寻址（机器码的"相对"地址怎么换算）
+// ----------------------------------------------------------------------------
+// 【是什么】编译出来的机器码里，call/jmp/取全局数据 常用"相对寻址"：
+// 指令里不写目标地址，而写"相对下一条指令差多少字节"的 32 位偏移。
+// 例如机器码 E8 01 00 00 00 表示"call 下一条指令地址 + 1"。
+// 换算公式：目标地址 = 指令结束位置 + 相对偏移。
+//
+// 【为什么在这里】特征码搜索命中的往往是这类指令（游戏里 call 全局函数、
+// lea 取全局变量到处都是）。要拿到真实目标地址，必须做这次换算。
+// 三个函数对应三种指令，偏移位置不同：
+//   call rel32 / jmp rel32：偏移在 +0x1（E8/E9 后）；
+//   lea reg, [rip+off]：偏移在 +0x3（48 8D xx 后）。
+//
+// 【最小示例（手算一遍就懂了）】
+//   // 内存里：48 8D 05 34 12 00 00   （lea rax, [rip+0x1234]）
+//   //         ^^^^^^^^ ^^^^^^^^^^^^
+//   //         前缀+操作码  相对偏移(小端序 = 0x1234)
+//   // 指令从地址 0x1000 开始，长 7 字节 → 指令结束于 0x1007
+//   // 目标地址 = 0x1007 + 0x1234 = 0x223B
+//
+// 【自己动手要点】
+// 1) 偏移是"有符号"的（i32），可能是负数（往前跳）；
+// 2) 小端序：看到 34 12 00 00 要读成 0x1234，不是 0x34120000；
+// 3) 动手练：用任意反汇编器（objdump / Ghidra / x64dbg）找一条 call 指令，
+//    对照这个公式手动算一遍目标地址，和反汇编器给出的对比。
+// ----------------------------------------------------------------------------
+//
+// 【为什么需要这个文件？】
+// x86-64 机器码里，"调用函数 / 跳转 / 取全局数据"经常用"相对寻址"：
+// 指令里存的是一个 32 位"相对偏移"，真正的目标地址 = 指令结束位置 + 偏移。
+// 比如汇编 `call target` 的机器码是 E8 <4 字节偏移>，那个偏移是
+// "相对下一条指令"的，不是绝对地址。要拿到真实地址必须手动加回去。
+//
+// 特征码搜索经常命中这类指令，所以需要这些函数把相对地址换算成绝对地址：
+//   - follow_call：解析 `call` 的目标（偏移在第 1 字节后，即 +0x1）；
+//   - follow_jmp：解析 `jmp` 的目标（同样 +0x1）；
+//   - resolve_rip：解析 RIP 相对取址（如 `lea rax, [rip+off]`，偏移在 +0x3）。
+// ============================================================================
+
 use memflow::prelude::*;
 
+// 解析 `call rel32`：偏移在指令首字节之后（+0x1）
 #[inline]
 pub fn follow_call(mem: &mut impl MemoryView, base: Address) -> Result<Address> {
     rel32_target(mem, base, 0x1)
 }
 
+// 解析 `jmp rel32`：偏移也在 +0x1
 #[inline]
 pub fn follow_jmp(mem: &mut impl MemoryView, base: Address) -> Result<Address> {
     rel32_target(mem, base, 0x1)
 }
 
+// 解析 RIP 相对寻址（如 `lea reg, [rip+off]`）：偏移在 +0x3
 #[inline]
 pub fn resolve_rip(mem: &mut impl MemoryView, base: Address) -> Result<Address> {
     rel32_target(mem, base, 0x3)
 }
 
+// 核心实现：读取 4 字节相对偏移，加到"指令结束位置"上得到目标地址
 fn rel32_target(mem: &mut impl MemoryView, base: Address, offset: usize) -> Result<Address> {
-    let rel32: i32 = mem.read(base + offset).data_part()?; // RIP-relative displacement.
-    let instr_end = (base + offset + size_of::<i32>()).to_umem() as i64;
-    let target_addr = instr_end.wrapping_add(rel32 as i64);
+    let rel32: i32 = mem.read(base + offset).data_part()?; // 读取相对偏移量
+    let instr_end = (base + offset + size_of::<i32>()).to_umem() as i64; // 指令结束位置
+    let target_addr = instr_end.wrapping_add(rel32 as i64); // 结束位置 + 偏移 = 目标
 
     Ok(target_addr.into())
 }
